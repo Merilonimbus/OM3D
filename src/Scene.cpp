@@ -92,8 +92,10 @@ void Scene::render() const {
     draw_full_screen_triangle();
 
     // Render every object
+    const auto cam_frustum = _camera.build_frustum();
+    const auto cam_position= _camera.position();
     for(const SceneObject& obj : _objects) {
-        obj.render();
+        if (obj.collide(cam_frustum, cam_position)) obj.render();
     }
 }
 
