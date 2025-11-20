@@ -4,6 +4,8 @@
 
 #include <shader_structs.h>
 
+#include "glad/gl.h"
+
 namespace OM3D {
 
 Scene::Scene() {
@@ -50,7 +52,7 @@ void Scene::set_sun(float altitude, float azimuth, glm::vec3 color) {
     _sun_color = color;
 }
 
-void Scene::render() const {
+void Scene::render(PassType pass_type) const {
     // Fill and bind frame data buffer
     TypedBuffer<shader::FrameData> buffer(nullptr, 1);
     {
@@ -96,17 +98,23 @@ void Scene::render() const {
         const auto cam_frustum = _camera.build_frustum();
         const auto cam_position= _camera.position();
         // Opaque first
+        glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Opaques");
         for(const SceneObject& obj : _objects) {
             if(obj.material().is_opaque()) {
-                if (obj.collide(cam_frustum, cam_position)) obj.render();
+                if (obj.collide(cam_frustum, cam_position)) obj.render(pass_type == DEPTH);
             }
         }
+        glPopDebugGroup();
 
         // Transparent after
-        for(const SceneObject& obj : _objects) {
-            if(!obj.material().is_opaque()) {
-                if (obj.collide(cam_frustum, cam_position)) obj.render();
+        if (pass_type == MAIN) {
+            glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Transparents");
+            for(const SceneObject& obj : _objects) {
+                if(!obj.material().is_opaque()) {
+                    if (obj.collide(cam_frustum, cam_position)) obj.render(false);
+                }
             }
+            glPopDebugGroup();
         }
     }
 

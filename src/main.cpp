@@ -368,6 +368,7 @@ struct RendererState {
             state.depth_texture = Texture(size, ImageFormat::Depth32_FLOAT, WrapMode::Clamp);
             state.lit_hdr_texture = Texture(size, ImageFormat::RGBA16_FLOAT, WrapMode::Clamp);
             state.main_framebuffer = Framebuffer(&state.depth_texture, std::array{&state.lit_hdr_texture});
+            state.depth_framebuffer = Framebuffer(&state.depth_texture);
         }
 
         return state;
@@ -379,7 +380,7 @@ struct RendererState {
     Texture lit_hdr_texture;
 
     Framebuffer main_framebuffer;
-    Framebuffer tone_map_framebuffer;
+    Framebuffer depth_framebuffer;
 };
 
 
@@ -448,8 +449,8 @@ int main(int argc, char** argv) {
                 glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Z-prepass");
 
 
-                renderer.main_framebuffer.bind(true, false);
-                scene->render();
+                renderer.depth_framebuffer.bind(true, false);
+                scene->render(Scene::DEPTH);
 
                 glPopDebugGroup();  // Z-prepass
             }

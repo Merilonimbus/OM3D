@@ -48,7 +48,7 @@ void Material::set_stored_uniform(u32 name_hash, UniformValue value) {
     _uniforms.emplace_back(name_hash, std::move(value));
 }
 
-void Material::bind() const {
+void Material::bind(bool depth) const {
     switch(_blend_mode) {
         case BlendMode::None:
             glDisable(GL_BLEND);
@@ -91,11 +91,15 @@ void Material::bind() const {
         texture.second->bind(texture.first);
     }
 
+    auto program = _program.get();
+    if (depth) program = _depth_program.get();
+
+
     for(const auto& [h, v] : _uniforms) {
-        _program->set_uniform(h, v);
+        program->set_uniform(h, v);
     }
 
-    _program->bind();
+    program->bind();
 }
 
 Material Material::textured_pbr_material(bool alpha_test) {
@@ -107,6 +111,7 @@ Material Material::textured_pbr_material(bool alpha_test) {
     }
 
     material._program = Program::from_files("lit.frag", "basic.vert", defines);
+    material._depth_program = Program::from_files("depth.frag", "basic.vert", defines);
 
     material.set_texture(0u, default_white_texture());
     material.set_texture(1u, default_normal_texture());
