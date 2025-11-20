@@ -17,6 +17,8 @@ class SceneObject {
 
         void render() const;
 
+        const Material& material() const;
+
         void set_transform(const glm::mat4& tr);
         const glm::mat4& transform() const;
         bool collide(const Frustum& cam_frustum, const glm::vec3& cam_position) const {

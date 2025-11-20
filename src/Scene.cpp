@@ -92,11 +92,24 @@ void Scene::render() const {
     draw_full_screen_triangle();
 
     // Render every object
-    const auto cam_frustum = _camera.build_frustum();
-    const auto cam_position= _camera.position();
-    for(const SceneObject& obj : _objects) {
-        if (obj.collide(cam_frustum, cam_position)) obj.render();
+    {
+        const auto cam_frustum = _camera.build_frustum();
+        const auto cam_position= _camera.position();
+        // Opaque first
+        for(const SceneObject& obj : _objects) {
+            if(obj.material().is_opaque()) {
+                if (obj.collide(cam_frustum, cam_position)) obj.render();
+            }
+        }
+
+        // Transparent after
+        for(const SceneObject& obj : _objects) {
+            if(!obj.material().is_opaque()) {
+                if (obj.collide(cam_frustum, cam_position)) obj.render();
+            }
+        }
     }
+
 }
 
 }
