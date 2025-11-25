@@ -4,6 +4,8 @@
 
 #include <algorithm>
 
+#include "PassType.hh"
+
 namespace OM3D {
 
 Material::Material() {
@@ -48,7 +50,7 @@ void Material::set_stored_uniform(u32 name_hash, UniformValue value) {
     _uniforms.emplace_back(name_hash, std::move(value));
 }
 
-void Material::bind(bool depth) const {
+void Material::bind(const PassType pass_type) const {
     switch(_blend_mode) {
         case BlendMode::None:
             glDisable(GL_BLEND);
@@ -92,7 +94,7 @@ void Material::bind(bool depth) const {
     }
 
     auto program = _program.get();
-    if (depth) program = _depth_program.get();
+    if (pass_type == PassType::DEPTH) program = _depth_program.get();
 
 
     for(const auto& [h, v] : _uniforms) {

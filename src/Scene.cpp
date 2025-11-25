@@ -52,7 +52,7 @@ void Scene::set_sun(float altitude, float azimuth, glm::vec3 color) {
     _sun_color = color;
 }
 
-void Scene::render(PassType pass_type) const {
+void Scene::render(const PassType pass_type) const {
     // Fill and bind frame data buffer
     TypedBuffer<shader::FrameData> buffer(nullptr, 1);
     {
@@ -101,17 +101,17 @@ void Scene::render(PassType pass_type) const {
         glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Opaques");
         for(const SceneObject& obj : _objects) {
             if(obj.material().is_opaque()) {
-                if (obj.collide(cam_frustum, cam_position)) obj.render(pass_type == DEPTH);
+                if (obj.collide(cam_frustum, cam_position)) obj.render(pass_type);
             }
         }
         glPopDebugGroup();
 
         // Transparent after
-        if (pass_type == MAIN) {
+        if (pass_type == PassType::MAIN) {
             glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Transparents");
             for(const SceneObject& obj : _objects) {
                 if(!obj.material().is_opaque()) {
-                    if (obj.collide(cam_frustum, cam_position)) obj.render(false);
+                    if (obj.collide(cam_frustum, cam_position)) obj.render(pass_type);
                 }
             }
             glPopDebugGroup();

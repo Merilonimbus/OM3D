@@ -450,7 +450,7 @@ int main(int argc, char** argv) {
 
 
                 renderer.depth_framebuffer.bind(true, false);
-                scene->render(Scene::DEPTH);
+                scene->render(PassType::DEPTH);
 
                 glPopDebugGroup();  // Z-prepass
             }
@@ -461,7 +461,7 @@ int main(int argc, char** argv) {
                 glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Main pass");
 
                 renderer.main_framebuffer.bind(false, true);
-                scene->render();
+                scene->render(PassType::MAIN);
 
                 glPopDebugGroup();  // Main pass
             }
