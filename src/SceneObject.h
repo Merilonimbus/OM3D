@@ -15,12 +15,15 @@ class SceneObject {
     public:
         SceneObject(std::shared_ptr<StaticMesh> mesh = nullptr, std::shared_ptr<Material> material = nullptr);
 
-        void render() const;
+        void render(bool depth=false) const;
 
         const Material& material() const;
 
         void set_transform(const glm::mat4& tr);
         const glm::mat4& transform() const;
+        bool collide(const Frustum& cam_frustum, const glm::vec3& cam_position) const {
+            return _mesh->collide(cam_frustum, cam_position);
+        }
 
     private:
         glm::mat4 _transform = glm::mat4(1.0f);

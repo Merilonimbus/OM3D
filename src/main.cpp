@@ -378,6 +378,7 @@ struct RendererState {
             state.tone_mapped_texture = Texture(size, ImageFormat::RGBA8_UNORM, WrapMode::Clamp);
             state.main_framebuffer = Framebuffer(&state.depth_texture, std::array{&state.lit_hdr_texture});
             state.tone_map_framebuffer = Framebuffer(nullptr, std::array{&state.tone_mapped_texture});
+            state.depth_framebuffer = Framebuffer(&state.depth_texture);
         }
 
         return state;
@@ -391,6 +392,7 @@ struct RendererState {
 
     Framebuffer main_framebuffer;
     Framebuffer tone_map_framebuffer;
+    Framebuffer depth_framebuffer;
 };
 
 
@@ -452,24 +454,42 @@ int main(int argc, char** argv) {
         // Draw everything
         {
             PROFILE_GPU("Frame");
+            glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Frame");
+
+            {
+                PROFILE_GPU("Z-prepass");
+                glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Z-prepass");
+
+
+                renderer.depth_framebuffer.bind(true, false);
+                scene->render(Scene::DEPTH);
+
+                glPopDebugGroup();  // Z-prepass
+            }
 
             // Render the scene
             {
                 PROFILE_GPU("Main pass");
+                glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Main pass");
 
-                renderer.main_framebuffer.bind(true, true);
+                renderer.main_framebuffer.bind(false, true);
                 scene->render();
+
+                glPopDebugGroup();  // Main pass
             }
 
             // Apply a tonemap as a full screen pass
             {
                 PROFILE_GPU("Tonemap");
+                glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Tonemap");
 
                 renderer.tone_map_framebuffer.bind(false, true);
                 tonemap_program->bind();
                 tonemap_program->set_uniform(HASH("exposure"), exposure);
                 renderer.lit_hdr_texture.bind(0);
                 draw_full_screen_triangle();
+
+                glPopDebugGroup();  // Tonemap
             }
 
             // Blit tonemap result to screen
@@ -479,7 +499,10 @@ int main(int argc, char** argv) {
             }
 
             // Draw GUI on top
+            glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "GUI");
             gui(*imgui);
+            glPopDebugGroup();  // GUI
+            glPopDebugGroup();  // Frame
         }
 
         glfwSwapBuffers(window);

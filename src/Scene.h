@@ -13,11 +13,15 @@ namespace OM3D {
 class Scene : NonMovable {
 
     public:
+        enum PassType {
+            MAIN,
+            DEPTH
+        };
         Scene();
 
         static Result<std::unique_ptr<Scene>> from_gltf(const std::string& file_name);
 
-        void render() const;
+        void render(PassType pass_type=MAIN) const;
 
         void add_object(SceneObject obj);
         void add_light(PointLight obj);

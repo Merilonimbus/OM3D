@@ -2,14 +2,53 @@
 
 #include <glad/gl.h>
 
+#include "glm/glm.hpp"
+#include "glm/geometric.hpp"
+
 namespace OM3D {
+    extern bool audit_bindings_before_draw;
 
-extern bool audit_bindings_before_draw;
+    StaticMesh::StaticMesh(const MeshData& data) :
+        _vertex_buffer(data.vertices),
+        _index_buffer(data.indices) {
+        if (data.vertices.empty()) {
+            _bounding_sphere.origin = glm::vec3(INFINITY);
+            _bounding_sphere.radius = 0.f;
+        }
+        else {
+            glm::vec3 min = data.vertices[0].position;
+            glm::vec3 max = data.vertices[0].position;
 
-StaticMesh::StaticMesh(const MeshData& data) :
-    _vertex_buffer(data.vertices),
-    _index_buffer(data.indices) {
-}
+            for (auto vertex : data.vertices) {
+                min = {
+                    glm::min(min.x, vertex.position.x),
+                    glm::min(min.y, vertex.position.y),
+                    glm::min(min.z, vertex.position.z),
+                };
+                max = {
+                    glm::max(max.x, vertex.position.x),
+                    glm::max(max.y, vertex.position.y),
+                    glm::max(max.z, vertex.position.z),
+                };
+            }
+            _bounding_sphere.origin = (min + max) / 2.f;
+            _bounding_sphere.radius = glm::length(max - min) / 2.f;
+        }
+    }
+
+    bool StaticMesh::collide(const Frustum& cam_frustum, const glm::vec3& cam_position) const
+    {
+        const auto c = _bounding_sphere.origin - cam_position;
+        auto in_plane = [&](const glm::vec3& n) {
+            return glm::dot(glm::normalize(n), c) > -_bounding_sphere.radius;
+        };
+
+        return in_plane(cam_frustum._bottom_normal)
+            && in_plane(cam_frustum._left_normal)
+            && in_plane(cam_frustum._right_normal)
+            && in_plane(cam_frustum._top_normal)
+            && in_plane(cam_frustum._bottom_normal);
+    }
 
 void StaticMesh::draw() const {
     _vertex_buffer.bind(BufferUsage::Attribute);

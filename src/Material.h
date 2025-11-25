@@ -43,12 +43,13 @@ class Material {
             _program->set_uniform(FWD(args)...);
         }
 
-        void bind() const;
+        void bind(bool depth=false) const;
 
         static Material textured_pbr_material(bool alpha_test = false);
 
     private:
         std::shared_ptr<Program> _program;
+        std::shared_ptr<Program> _depth_program;
         std::vector<std::pair<u32, std::shared_ptr<Texture>>> _textures;
         std::vector<std::pair<u32, UniformValue>> _uniforms;
 
