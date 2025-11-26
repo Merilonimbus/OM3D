@@ -367,8 +367,10 @@ struct RendererState {
         if(state.size.x > 0 && state.size.y > 0) {
             state.depth_texture = Texture(size, ImageFormat::Depth32_FLOAT, WrapMode::Clamp);
             state.lit_hdr_texture = Texture(size, ImageFormat::RGBA16_FLOAT, WrapMode::Clamp);
+            state.shadow_texture = Texture(size, ImageFormat::Depth32_FLOAT, WrapMode::Clamp);
             state.main_framebuffer = Framebuffer(&state.depth_texture, std::array{&state.lit_hdr_texture});
             state.depth_framebuffer = Framebuffer(&state.depth_texture);
+            state.shadow_framebuffer = Framebuffer(&state.shadow_texture);
         }
 
         return state;
@@ -378,9 +380,11 @@ struct RendererState {
 
     Texture depth_texture;
     Texture lit_hdr_texture;
+    Texture shadow_texture;
 
     Framebuffer main_framebuffer;
     Framebuffer depth_framebuffer;
+    Framebuffer shadow_framebuffer;
 };
 
 
@@ -453,6 +457,16 @@ int main(int argc, char** argv) {
                 scene->render(PassType::DEPTH);
 
                 glPopDebugGroup();  // Z-prepass
+            }
+
+            {
+                PROFILE_GPU("Shadow Pass");
+                glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Shadow Pass");
+
+                renderer.shadow_framebuffer.bind(true, false);
+                scene->render(PassType::SHADOW);
+
+                glPopDebugGroup();  // Shadow Pass
             }
 
             // Render the scene

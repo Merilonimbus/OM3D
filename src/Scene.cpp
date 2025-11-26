@@ -5,6 +5,7 @@
 #include <shader_structs.h>
 
 #include "glad/gl.h"
+#include "glm/ext/quaternion_geometric.hpp"
 
 namespace OM3D {
 
@@ -55,7 +56,7 @@ void Scene::set_sun(float altitude, float azimuth, glm::vec3 color) {
 void Scene::render(const PassType pass_type) const {
     // Fill and bind frame data buffer
     TypedBuffer<shader::FrameData> buffer(nullptr, 1);
-    {
+    if (pass_type != PassType::SHADOW) {
         auto mapping = buffer.map(AccessType::WriteOnly);
         mapping[0].camera.view_proj = _camera.view_proj_matrix();
         mapping[0].camera.inv_view_proj = glm::inverse(_camera.view_proj_matrix());
@@ -63,8 +64,8 @@ void Scene::render(const PassType pass_type) const {
         mapping[0].point_light_count = u32(_point_lights.size());
         mapping[0].sun_color = _sun_color;
         mapping[0].sun_dir = glm::normalize(_sun_direction);
+        buffer.bind(BufferUsage::Uniform, 0);
     }
-    buffer.bind(BufferUsage::Uniform, 0);
 
     // Fill and bind lights buffer
     TypedBuffer<shader::PointLight> light_buffer(nullptr, std::max(_point_lights.size(), size_t(1)));
@@ -86,17 +87,19 @@ void Scene::render(const PassType pass_type) const {
     DEBUG_ASSERT(_envmap && !_envmap->is_null());
     _envmap->bind(4);
 
-    // Bind brdf lut needed for lighting to scene rendering shaders
-    brdf_lut().bind(5);
+    if (pass_type == PassType::MAIN) {
+        // Bind brdf lut needed for lighting to scene rendering shaders
+        brdf_lut().bind(5);
 
-    // Render the sky
-    _sky_material.bind();
-    draw_full_screen_triangle();
+        // Render the sky
+        _sky_material.bind();
+        draw_full_screen_triangle();
+    }
 
+    const auto cam_frustum = _camera.build_frustum();
+    const auto cam_position= _camera.position();
     // Render every object
-    {
-        const auto cam_frustum = _camera.build_frustum();
-        const auto cam_position= _camera.position();
+    if (pass_type != PassType::SHADOW) {
         // Opaque first
         glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Opaques");
         for(const SceneObject& obj : _objects) {
@@ -104,7 +107,7 @@ void Scene::render(const PassType pass_type) const {
                 if (obj.collide(cam_frustum, cam_position)) obj.render(pass_type);
             }
         }
-        glPopDebugGroup();
+        glPopDebugGroup(); // Opaques
 
         // Transparent after
         if (pass_type == PassType::MAIN) {
@@ -114,8 +117,84 @@ void Scene::render(const PassType pass_type) const {
                     if (obj.collide(cam_frustum, cam_position)) obj.render(pass_type);
                 }
             }
-            glPopDebugGroup();
+            glPopDebugGroup(); // Transparents
         }
+    }
+    else {
+        glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Opaques");
+
+        std::vector<const SceneObject*> visible_objects;
+
+        for(const SceneObject& obj : _objects) {
+            if(!obj.material().is_opaque() && obj.collide(cam_frustum, cam_position)) {
+                visible_objects.emplace_back(&obj);
+            }
+        }
+
+        BoundingSphere bounding_sphere;
+
+        if (visible_objects.empty()) {
+            bounding_sphere.origin = glm::vec3(0);
+            bounding_sphere.radius = 1.f;
+        }
+        else {
+            glm::vec3 min = {};
+            glm::vec3 max = {};
+
+            {
+                auto [origin, radius] = visible_objects[0]->get_bounding_sphere();
+                min = origin - radius;
+                max = origin + radius;
+            }
+
+            for (auto object : visible_objects) {
+                auto [origin, radius] = object->get_bounding_sphere();
+                min = {
+                    glm::min(min.x, origin.x - radius),
+                    glm::min(min.y, origin.y - radius),
+                    glm::min(min.z, origin.z - radius),
+                };
+                max = {
+                    glm::max(max.x, origin.x + radius),
+                    glm::max(max.y, origin.y + radius),
+                    glm::max(max.z, origin.z + radius),
+                };
+            }
+            bounding_sphere.origin = (min + max) / 2.f;
+            bounding_sphere.radius = glm::length(max - min) / 2.f;
+        }
+
+        auto cam = Camera();
+
+        cam.set_view(Camera::orthographic(
+            -bounding_sphere.radius,
+            bounding_sphere.radius,
+            -bounding_sphere.radius,
+            bounding_sphere.radius,
+            0,
+            bounding_sphere.radius * 2
+            ));
+
+        cam.set_proj(glm::lookAt(
+            bounding_sphere.origin - glm::normalize(_sun_direction) * bounding_sphere.radius,
+            bounding_sphere.origin,
+            glm::vec3(0, 1, 0)
+            ));
+
+
+        auto mapping = buffer.map(AccessType::WriteOnly);
+        mapping[0].camera.view_proj = cam.projection_matrix();
+        mapping[0].camera.inv_view_proj = glm::inverse(cam.view_proj_matrix());
+        mapping[0].camera.position = cam.position();
+        mapping[0].point_light_count = u32(_point_lights.size());
+        mapping[0].sun_color = _sun_color;
+        mapping[0].sun_dir = glm::normalize(_sun_direction);
+        buffer.bind(BufferUsage::Uniform, 0);
+
+        for(const SceneObject *obj : visible_objects) {
+            obj->render(PassType::DEPTH);
+        }
+        glPopDebugGroup(); // Opaques
     }
 
 }
