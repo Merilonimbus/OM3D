@@ -11,19 +11,19 @@ uniform uint state;
 void main() {
     const ivec2 coord = ivec2(gl_FragCoord.xy);
 
-    if (state == 1) {       // depth
-        out_color = (texelFetch(depth, coord, 0).z > 0.) ? vec4(1.) : vec4(0.);
+    if (state == 0) {       // depth
+        out_color = pow(texelFetch(depth, coord, 0).x, 0.35);
     }
-    else if (state == 2) {  // albedo
-        out_color = vec4(texelFetch(depth, coord, 0).xyz, 1.);
+    else if (state == 1) {  // albedo
+        out_color = vec4(texelFetch(albedo_roughness, coord, 0).xyz, 1.);
     }
-    else if (state == 3) {  // normal
-        out_color = vec4(texelFetch(depth, coord, 0).xyz, 1.);
+    else if (state == 2) {  // normal
+        out_color = vec4(texelFetch(normal_metalness, coord, 0).xyz, 1.);
     }
-    else if (state == 4) {  // roughness
-        out_color = vec4(texelFetch(depth, coord, 0).www, 1.);
+    else if (state == 3) {  // roughness
+        out_color = vec4(texelFetch(albedo_roughness, coord, 0).www, 1.);
     }
-    else if (state == 5) {  // metalness
-        out_color = vec4(texelFetch(depth, coord, 0).www, 1.);
+    else if (state == 4) {  // metalness
+        out_color = vec4(texelFetch(normal_metalness, coord, 0).www, 1.);
     }
 }
