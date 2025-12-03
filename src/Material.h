@@ -52,6 +52,7 @@ class Material {
     private:
         std::shared_ptr<Program> _program;
         std::shared_ptr<Program> _depth_program;
+        std::shared_ptr<Program> _deferred_program;
         std::vector<std::pair<u32, std::shared_ptr<Texture>>> _textures;
         std::vector<std::pair<u32, UniformValue>> _uniforms;
 

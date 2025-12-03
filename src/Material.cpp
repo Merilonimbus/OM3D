@@ -86,13 +86,21 @@ void Material::bind(const PassType pass_type) const {
         break;
     }
 
-    for(const auto& texture : _textures) {
-        texture.second->bind(texture.first);
+    for(const auto&[index, texture] : _textures) {
+        texture->bind(index);
     }
 
     auto program = _program.get();
-    if (pass_type == PassType::DEPTH) program = _depth_program.get();
-
+    switch(pass_type) {
+        case PassType::DEPTH:
+            program = _depth_program.get();
+            break;
+        case PassType::DEFFERED:
+            program = _program.get();
+            break;
+        default:
+            break;
+    }
 
     for(const auto& [h, v] : _uniforms) {
         program->set_uniform(h, v);
@@ -111,6 +119,7 @@ Material Material::textured_pbr_material(bool alpha_test) {
 
     material._program = Program::from_files("lit.frag", "basic.vert", defines);
     material._depth_program = Program::from_files("depth.frag", "basic.vert", defines);
+    material._deferred_program = Program::from_files("deferred.frag", "basic.vert", defines);
 
     material.set_texture(0u, default_white_texture());
     material.set_texture(1u, default_normal_texture());

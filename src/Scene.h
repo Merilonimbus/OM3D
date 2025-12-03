@@ -8,7 +8,10 @@
 #include <vector>
 #include <memory>
 
+#include "BufferMapping.h"
+#include "BufferMapping.h"
 #include "PassType.h"
+#include "shader_structs.h"
 
 namespace OM3D {
 
@@ -49,6 +52,22 @@ class Scene : NonMovable {
         Material _sky_material;
 
         Camera _camera;
+
+        void set_light() const;
+
+        void render_sky() const;
+
+        void set_frame_buffer(TypedBuffer<shader::FrameData> &buffer) const;
+
+        void set_frame_buffer_shadow(TypedBuffer<shader::FrameData> &buffer, const Camera &sun_camera) const;
+
+        std::pair<std::vector<SceneObject>, std::vector<SceneObject>> get_opaque_transparent(const Camera &camera) const;
+
+        void render_main(PassType pass_type) const;
+
+        void render_depth(PassType pass_type) const;
+
+        void render_shadow(PassType pass_type) const;
 };
 
 }

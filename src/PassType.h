@@ -9,6 +9,7 @@ enum class PassType {
     MAIN,
     DEPTH,
     SHADOW,
+    DEFFERED,
 };
 
 #endif //OM3D_PASSTYPE_HH

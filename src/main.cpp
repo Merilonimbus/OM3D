@@ -20,6 +20,16 @@
 using namespace OM3D;
 
 
+static const char* current_state = nullptr;
+
+static const char * states[5] = {
+    "Depth",
+    "Albedo",
+    "Normals",
+    "Roughness",
+    "Metalness",
+};
+
 static float delta_time = 0.0f;
 static float sun_altitude = 45.0f;
 static float sun_azimuth = 45.0f;
@@ -208,6 +218,23 @@ void gui(ImGuiRenderer& imgui) {
             ImGui::EndMenu();
         }
 
+        if (ImGui::BeginMenu("Debug")) {
+
+            if (ImGui::BeginCombo("##combo", current_state)) {
+                for (auto & item : states) {
+                    const bool is_selected = current_state == item;
+
+                    if (ImGui::Selectable(item, is_selected))
+                        current_state = item;
+                    if (is_selected)
+                        ImGui::SetItemDefaultFocus();
+                }
+
+                ImGui::EndCombo();
+            }
+            ImGui::EndMenu();
+        }
+
         if(ImGui::BeginMenu("Lighting")) {
             ImGui::DragFloat("Exposure", &exposure, 0.01f, 0.01f, 10.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
 
@@ -377,10 +404,16 @@ struct RendererState {
             state.lit_hdr_texture = Texture(size, ImageFormat::RGBA16_FLOAT, WrapMode::Clamp);
             state.tone_mapped_texture = Texture(size, ImageFormat::RGBA8_UNORM, WrapMode::Clamp);
             state.shadow_texture = Texture(glm::uvec2(2048,2048), ImageFormat::Depth32_FLOAT, WrapMode::Clamp, true);
+            state.albedo_roughness_texture = Texture(size, ImageFormat::RGBA8_sRGB, WrapMode::Clamp);
+            state.normal_metalness_texture = Texture(size, ImageFormat::RGBA8_UNORM, WrapMode::Clamp);
+            state.debug_texture = Texture(size, ImageFormat::RGBA8_UNORM, WrapMode::Clamp);
+
             state.main_framebuffer = Framebuffer(&state.depth_texture, std::array{&state.lit_hdr_texture});
             state.tone_map_framebuffer = Framebuffer(nullptr, std::array{&state.tone_mapped_texture});
             state.depth_framebuffer = Framebuffer(&state.depth_texture);
             state.shadow_framebuffer = Framebuffer(&state.shadow_texture);
+            state.deferred_framebuffer = Framebuffer(nullptr, std::array{&state.albedo_roughness_texture, &state.normal_metalness_texture});
+            state.debug_framebuffer = Framebuffer(nullptr, std::array{&state.debug_texture});
         }
 
         return state;
@@ -392,11 +425,16 @@ struct RendererState {
     Texture lit_hdr_texture;
     Texture tone_mapped_texture;
     Texture shadow_texture;
+    Texture albedo_roughness_texture;
+    Texture normal_metalness_texture;
+    Texture debug_texture;
 
     Framebuffer main_framebuffer;
     Framebuffer tone_map_framebuffer;
     Framebuffer depth_framebuffer;
     Framebuffer shadow_framebuffer;
+    Framebuffer deferred_framebuffer;
+    Framebuffer debug_framebuffer;
 };
 
 
@@ -429,6 +467,7 @@ int main(int argc, char** argv) {
     load_default_scene();
 
     auto tonemap_program = Program::from_files("tonemap.frag", "screen.vert");
+    auto debug_program = Program::from_files("debug.frag", "screen.vert");
     RendererState renderer;
 
     for(;;) {
@@ -454,73 +493,146 @@ int main(int argc, char** argv) {
         if(const auto& io = ImGui::GetIO(); !io.WantCaptureMouse && !io.WantCaptureKeyboard) {
             process_inputs(window, scene->camera());
         }
-
-        // Draw everything
-        {
-            PROFILE_GPU("Frame");
-            glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Frame");
-
+        if (current_state == nullptr) {
+            // Draw everything
             {
-                PROFILE_GPU("Z-prepass");
-                glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Z-prepass");
+                PROFILE_GPU("Frame");
+                glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Frame");
+
+                {
+                    PROFILE_GPU("Z-prepass");
+                    glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Z-prepass");
 
 
-                renderer.depth_framebuffer.bind(true, false);
-                scene->render(PassType::DEPTH);
+                    renderer.depth_framebuffer.bind(true, false);
+                    scene->render(PassType::DEPTH);
 
-                glPopDebugGroup();  // Z-prepass
+                    glPopDebugGroup();  // Z-prepass
+                }
+
+                {
+                    PROFILE_GPU("Shadow Pass");
+                    glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Shadow Pass");
+
+                    renderer.shadow_framebuffer.bind(true, false);
+                    scene->render(PassType::SHADOW);
+
+                    glPopDebugGroup();  // Shadow Pass
+                }
+
+                {
+                    PROFILE_GPU("Deferred Pass");
+                    glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Deferred Pass");
+
+                    renderer.deferred_framebuffer.bind(false, true);
+                    scene->render(PassType::DEFFERED);
+
+                    glPopDebugGroup(); // Deferred Pass
+                }
+
+                // Render the scene
+                {
+                    PROFILE_GPU("Main pass");
+                    glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Main pass");
+
+                    renderer.shadow_texture.bind(6);
+
+                    renderer.main_framebuffer.bind(false, true);
+                    scene->render(PassType::MAIN);
+
+                    glPopDebugGroup();  // Main pass
+                }
+
+                // Apply a tonemap as a full screen pass
+                {
+                    PROFILE_GPU("Tonemap");
+                    glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Tonemap");
+
+                    renderer.tone_map_framebuffer.bind(false, true);
+                    tonemap_program->bind();
+                    tonemap_program->set_uniform(HASH("exposure"), exposure);
+                    renderer.lit_hdr_texture.bind(0);
+                    draw_full_screen_triangle();
+
+                    glPopDebugGroup();  // Tonemap
+                }
+
+                // Blit tonemap result to screen
+                {
+                    PROFILE_GPU("Blit");
+                    blit_to_screen(renderer.tone_mapped_texture);
+                }
+
+                // Draw GUI on top
+                glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "GUI");
+                gui(*imgui);
+                glPopDebugGroup();  // GUI
+                glPopDebugGroup();  // Frame
             }
-
-            {
-                PROFILE_GPU("Shadow Pass");
-                glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Shadow Pass");
-
-                renderer.shadow_framebuffer.bind(true, false);
-                scene->render(PassType::SHADOW);
-
-                glPopDebugGroup();  // Shadow Pass
-            }
-
-            // Render the scene
-            {
-                PROFILE_GPU("Main pass");
-                glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Main pass");
-
-                renderer.shadow_texture.bind(6);
-
-                renderer.main_framebuffer.bind(false, true);
-                scene->render(PassType::MAIN);
-
-                glPopDebugGroup();  // Main pass
-            }
-
-            // Apply a tonemap as a full screen pass
-            {
-                PROFILE_GPU("Tonemap");
-                glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Tonemap");
-
-                renderer.tone_map_framebuffer.bind(false, true);
-                tonemap_program->bind();
-                tonemap_program->set_uniform(HASH("exposure"), exposure);
-                renderer.lit_hdr_texture.bind(0);
-                draw_full_screen_triangle();
-
-                glPopDebugGroup();  // Tonemap
-            }
-
-            // Blit tonemap result to screen
-            {
-                PROFILE_GPU("Blit");
-                blit_to_screen(renderer.tone_mapped_texture);
-            }
-
-            // Draw GUI on top
-            glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "GUI");
-            gui(*imgui);
-            glPopDebugGroup();  // GUI
-            glPopDebugGroup();  // Frame
         }
+        else {
+            // Draw everything
+            {
+                int state = 0;
+                for (int i = 0; i < 5; ++i) {
+                    if (current_state == states[i]) {
+                        state = i;
+                        break;
+                    }
+                }
 
+                PROFILE_GPU("Frame");
+                glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Frame");
+
+                {
+                    PROFILE_GPU("Z-prepass");
+                    glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Z-prepass");
+
+
+                    renderer.depth_framebuffer.bind(true, false);
+                    scene->render(PassType::DEPTH);
+
+                    glPopDebugGroup();  // Z-prepass
+                }
+
+                {
+                    PROFILE_GPU("Deferred Pass");
+                    glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Deferred Pass");
+
+                    renderer.deferred_framebuffer.bind(false, true);
+                    scene->render(PassType::DEFFERED);
+
+                    glPopDebugGroup(); // Deferred Pass
+                }
+
+                {
+                    PROFILE_GPU("Debug");
+                    glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Debug");
+
+                    renderer.debug_framebuffer.bind(false, true);
+                    debug_program->bind();
+                    debug_program->set_uniform(HASH("state"), static_cast<u32>(state));
+                    renderer.depth_texture.bind(0);
+                    renderer.albedo_roughness_texture.bind(1);
+                    renderer.normal_metalness_texture.bind(2);
+                    draw_full_screen_triangle();
+
+                    glPopDebugGroup();  // Debug
+                }
+
+                // Blit tonemap result to screen
+                {
+                    PROFILE_GPU("Blit");
+                    blit_to_screen(renderer.debug_texture);
+                }
+
+                // Draw GUI on top
+                glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "GUI");
+                gui(*imgui);
+                glPopDebugGroup();  // GUI
+                glPopDebugGroup();  // Frame
+            }
+        }
         glfwSwapBuffers(window);
     }
 

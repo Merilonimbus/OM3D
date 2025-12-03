@@ -14,7 +14,7 @@ void SceneObject::render(const PassType pass_type) const {
         return;
     }
     _material->set_depth_test_mode(pass_type == PassType::MAIN ? DepthTestMode::Equal : DepthTestMode::Standard);
-    _material->set_uniform(HASH("model"), transform());
+    _material->set_stored_uniform(HASH("model"), transform());
     _material->bind(pass_type);
     _mesh->draw();
 }
