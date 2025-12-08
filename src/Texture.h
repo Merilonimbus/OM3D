@@ -9,6 +9,8 @@
 #include <vector>
 #include <memory>
 
+#define TEXTURE_FLAG_COMPARE    0b00000001
+#define TEXTURE_FLAG_LINEAR     0b00000010
 
 namespace OM3D {
 
@@ -39,7 +41,7 @@ class Texture {
 
         Texture(const TextureData& data);
 
-        Texture(const glm::uvec2 &size, ImageFormat format, WrapMode wrap, bool compare_mode=false);
+        Texture(const glm::uvec2 &size, ImageFormat format, WrapMode wrap, char flags=0);
 
         static Texture empty_cubemap(u32 size, ImageFormat format, u32 mipmaps = 1);
         static Texture cubemap_from_equirec(const Texture& equirec);

@@ -26,8 +26,8 @@ class SceneObject {
         BoundingSphere get_bounding_sphere() const {
             return _mesh->get_bounding_sphere();
         };
-        bool collide(const Frustum& cam_frustum, const glm::vec3& cam_position) const {
-            return _mesh->collide(cam_frustum, cam_position);
+        bool collide(const Camera& camera) const {
+            return _mesh->collide(camera, transform());
         }
 
     private:

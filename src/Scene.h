@@ -40,7 +40,7 @@ class Scene : NonMovable {
 
         Camera get_sun_camera(std::vector<const SceneObject*> *visible_objects = nullptr) const;
 
-        void bind_envmap(int index) const;
+        void bind_envmap(int index = 4) const;
 
     private:
         std::vector<SceneObject> _objects;
@@ -55,10 +55,10 @@ class Scene : NonMovable {
 
         Camera _camera;
 
-        void set_light() const;
+        void set_light(TypedBuffer<shader::PointLight> &light_buffer) const;
         void set_frame_buffer_shadow(TypedBuffer<shader::FrameData> &buffer, const Camera &sun_camera) const;
 
-        std::pair<std::vector<SceneObject>, std::vector<SceneObject>> get_opaque_transparent(const Camera &camera) const;
+        std::pair<std::vector<const SceneObject*>, std::vector<const SceneObject*>> get_opaque_transparent(const Camera &camera) const;
 
         void render_sky() const;
         void render_main(PassType pass_type) const;

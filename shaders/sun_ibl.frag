@@ -42,24 +42,6 @@ void main() {
         //}
     }
 
-
     out_color = vec4(acc, 1);
-
-
-    #ifdef DEBUG_NORMAL
-    out_color = vec4(normal * 0.5 + 0.5, 1.0);
-    #endif
-
-    #ifdef DEBUG_METAL
-    out_color = vec4(vec3(metallic), 1.0);
-    #endif
-
-    #ifdef DEBUG_ROUGH
-    out_color = vec4(vec3(roughness), 1.0);
-    #endif
-
-    #ifdef DEBUG_ENV
-    out_color = vec4(texture(in_envmap, normal).rgb, 1.0);
-    #endif
 }
 

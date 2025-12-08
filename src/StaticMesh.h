@@ -26,7 +26,7 @@ class StaticMesh : NonCopyable {
         StaticMesh(const MeshData& data);
 
         void draw() const;
-        bool collide(const Frustum& cam_frustum, const glm::vec3& cam_position) const;
+        bool collide(const Camera& camera, const glm::mat4 &transform) const;
         BoundingSphere get_bounding_sphere() const;
 
     private:

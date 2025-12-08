@@ -46,17 +46,12 @@ Camera Scene::get_sun_camera(std::vector<const SceneObject*> *visible_objects) c
     if (visible_objects == nullptr) {
         to_delete = true;
         visible_objects = new std::vector<const SceneObject*>();
-        const auto cam_frustum = _camera.build_frustum();
-        const auto cam_position= _camera.position();
 
-        for(const SceneObject& obj : _objects) {
-            if(obj.material().is_opaque() && obj.collide(cam_frustum, cam_position)) {
-                visible_objects->emplace_back(&obj);
-            }
-        }
+        auto [_visible_objects, _] = get_opaque_transparent(_camera);
+        *visible_objects = _visible_objects;
     }
 
-    BoundingSphere bounding_sphere;
+    BoundingSphere bounding_sphere{};
 
     if (visible_objects->empty()) {
         bounding_sphere.origin = glm::vec3(0);
@@ -106,6 +101,7 @@ Camera Scene::get_sun_camera(std::vector<const SceneObject*> *visible_objects) c
         bounding_sphere.origin,
         glm::vec3(0, 1, 0)
         ));
+
     return cam;
 }
 
@@ -126,9 +122,12 @@ void Scene::set_sun(float altitude, float azimuth, glm::vec3 color) {
     _sun_color = color;
 }
 
-void Scene::set_light() const {
+static void bind_brdf(u32 index = 5) {
+    brdf_lut().bind(index);
+}
+
+void Scene::set_light(TypedBuffer<shader::PointLight> &light_buffer) const {
     // Fill and bind lights buffer
-    TypedBuffer<shader::PointLight> light_buffer(nullptr, std::max(_point_lights.size(), size_t(1)));
     {
         auto mapping = light_buffer.map(AccessType::WriteOnly);
         for(size_t i = 0; i != _point_lights.size(); ++i) {
@@ -144,7 +143,7 @@ void Scene::set_light() const {
     light_buffer.bind(BufferUsage::Storage, 1);
 
     // Bind brdf lut needed for lighting to scene rendering shaders
-    brdf_lut().bind(5);
+    bind_brdf();
 }
 
 void Scene::bind_envmap(const int index) const {
@@ -155,7 +154,6 @@ void Scene::bind_envmap(const int index) const {
 
 void Scene::render_sky() const {
 
-    bind_envmap(4);
     // Render the sky
     _sky_material.bind();
     _sky_material.set_uniform(HASH("intensity"), _ibl_intensity);
@@ -172,7 +170,7 @@ void Scene::set_frame_buffer(TypedBuffer<shader::FrameData> &buffer) const {
     mapping[0].sun_color = _sun_color;
     mapping[0].sun_dir = glm::normalize(_sun_direction);
     mapping[0].ibl_intensity = _ibl_intensity;
-    mapping[0].sun_inv_view_proj = glm::inverse(get_sun_camera().view_proj_matrix());
+    mapping[0].sun_view_proj = get_sun_camera().view_proj_matrix();
     buffer.bind(BufferUsage::Uniform, 0);
 }
 
@@ -184,20 +182,17 @@ void Scene::set_frame_buffer_shadow(TypedBuffer<shader::FrameData> &buffer, cons
     mapping[0].point_light_count = u32(_point_lights.size());
     mapping[0].sun_color = _sun_color;
     mapping[0].sun_dir = glm::normalize(_sun_direction);
-    mapping[0].sun_inv_view_proj = glm::inverse(sun_camera.view_proj_matrix());
+    mapping[0].sun_view_proj = sun_camera.view_proj_matrix();
     buffer.bind(BufferUsage::Uniform, 0);
 }
 
-std::pair<std::vector<SceneObject>, std::vector<SceneObject>> Scene::get_opaque_transparent(const Camera &camera) const {
-    std::vector<SceneObject> opaque{};
-    std::vector<SceneObject> transparent{};
-
-    const auto cam_frustum = camera.build_frustum();
-    const auto cam_position= camera.position();
+std::pair<std::vector<const SceneObject*>, std::vector<const SceneObject*>> Scene::get_opaque_transparent(const Camera &camera) const {
+    std::vector<const SceneObject*> opaque{};
+    std::vector<const SceneObject*> transparent{};
 
     for(const SceneObject& obj : _objects) {
-        if (obj.collide(cam_frustum, cam_position)) {
-            obj.material().is_opaque() ? opaque.emplace_back(obj) : transparent.emplace_back(obj);
+        if (obj.collide(camera)) {
+            obj.material().is_opaque() ? opaque.emplace_back(&obj) : transparent.emplace_back(&obj);
         }
     }
     return std::make_pair(opaque, transparent);
@@ -205,21 +200,23 @@ std::pair<std::vector<SceneObject>, std::vector<SceneObject>> Scene::get_opaque_
 
 void Scene::render_main(const PassType pass_type) const {
     TypedBuffer<shader::FrameData> buffer(nullptr, 1);
+    TypedBuffer<shader::PointLight> light_buffer(nullptr, std::max(_point_lights.size(), size_t(1)));
 
     set_frame_buffer(buffer);
-    set_light();
+    set_light(light_buffer);
+    bind_envmap();
     render_sky();
 
     auto [opaques, transparents] = get_opaque_transparent(_camera);
 
     glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Opaques");
-    for(const SceneObject& obj : opaques) {
-        obj.render(pass_type);
+    for(const SceneObject* obj : opaques) {
+        obj->render(pass_type);
     }
     glPopDebugGroup(); // Opaques
     glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Transparents");
-    for(const SceneObject& obj : transparents) {
-        obj.render(pass_type);
+    for(const SceneObject* obj : transparents) {
+        obj->render(pass_type);
     }
     glPopDebugGroup(); // Transparents
 }
@@ -231,8 +228,8 @@ void Scene::render_deferred(const PassType pass_type) const {
     auto [opaques, _] = get_opaque_transparent(_camera);
 
     glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Opaques");
-    for(const SceneObject& obj : opaques) {
-        obj.render(pass_type);
+    for(const SceneObject* obj : opaques) {
+        obj->render(pass_type);
     }
     glPopDebugGroup(); // Opaques
 }
@@ -245,21 +242,22 @@ void Scene::render_depth(const PassType pass_type) const {
     auto [opaques, _] = get_opaque_transparent(_camera);
 
     glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Opaques");
-    for(const SceneObject& obj : opaques) {
-        obj.render(pass_type);
+    for(const SceneObject* obj : opaques) {
+        obj->render(pass_type);
     }
     glPopDebugGroup(); // Opaques
 }
 
-void Scene::render_shadow(const PassType pass_type) const {
+void Scene::render_shadow([[maybe_unused]] const PassType pass_type) const {
     TypedBuffer<shader::FrameData> buffer(nullptr, 1);
     const auto sun_camera = get_sun_camera();
 
     set_frame_buffer_shadow(buffer, sun_camera);
     auto [opaques, _] = get_opaque_transparent(sun_camera);
+
     glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Opaques");
-    for(const SceneObject& obj : opaques) {
-        obj.render(pass_type);
+    for(const SceneObject *obj : opaques) {
+        obj->render(PassType::DEPTH);
     }
     glPopDebugGroup(); // Opaques
 }

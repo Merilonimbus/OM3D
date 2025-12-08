@@ -13,7 +13,14 @@ void SceneObject::render(const PassType pass_type) const {
     if(!_material || !_mesh) {
         return;
     }
-    _material->set_depth_test_mode(pass_type == PassType::MAIN ? DepthTestMode::Equal : DepthTestMode::Standard);
+    switch(pass_type) {
+        case PassType::DEPTH:
+            _material->set_depth_test_mode(DepthTestMode::Standard);
+            break;
+        default:
+            _material->set_depth_test_mode(DepthTestMode::Equal);
+            break;
+    }
     _material->set_stored_uniform(HASH("model"), transform());
     _material->bind(pass_type);
     _mesh->draw();

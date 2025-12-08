@@ -231,8 +231,11 @@ void ImGuiRenderer::finish() {
 
 float ImGuiRenderer::update_delta_time() {
     const auto now = std::chrono::high_resolution_clock::now();
-    const float dt = std::chrono::duration_cast<std::chrono::duration<float>>(now - _last).count();
+    float dt = std::chrono::duration_cast<std::chrono::duration<float>>(now - _last).count();
     _last = now;
+    if (dt <= 0.0f)
+        dt = 1E-10f;
+
     return dt;
 }
 
