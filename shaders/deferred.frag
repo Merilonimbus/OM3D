@@ -3,8 +3,9 @@
 #include "utils.glsl"
 #include "lighting.glsl"
 
-layout(location = 0) out vec4 out_albedo_roughness;
-layout(location = 1) out vec4 out_normal_metalness;
+layout(location = 0) out vec4 out_color;
+layout(location = 1) out vec4 out_albedo_roughness;
+layout(location = 2) out vec4 out_normal_metalness;
 
 layout(location = 0) in vec3 in_normal;
 layout(location = 1) in vec2 in_uv;
@@ -48,4 +49,5 @@ void main() {
 
     out_albedo_roughness = vec4(base_color.xyz, roughness);
     out_normal_metalness = vec4((normalize(normal) + 1.) * 0.5, metallic);
+    out_color = vec4(texture(in_emissive, in_uv).rgb * emissive_factor, alpha);
 }

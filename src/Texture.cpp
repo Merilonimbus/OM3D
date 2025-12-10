@@ -70,11 +70,11 @@ Texture::Texture(const glm::uvec2 &size, const ImageFormat format, const WrapMod
     glTextureParameteri(_handle.get(), GL_TEXTURE_WRAP_R, gl_wrap);
     glTextureParameteri(_handle.get(), GL_TEXTURE_WRAP_S, gl_wrap);
     glTextureParameteri(_handle.get(), GL_TEXTURE_WRAP_T, gl_wrap);
-    if (flags | TEXTURE_FLAG_COMPARE) {
+    if (flags & TEXTURE_FLAG_COMPARE) {
         glTextureParameteri(_handle.get(), GL_TEXTURE_COMPARE_MODE , GL_COMPARE_REF_TO_TEXTURE);
         glTextureParameteri(_handle.get(), GL_TEXTURE_COMPARE_FUNC , GL_LESS);
     }
-    if (flags | TEXTURE_FLAG_LINEAR) {
+    if (flags & TEXTURE_FLAG_LINEAR) {
         glTextureParameteri(_handle.get(), GL_TEXTURE_MIN_FILTER  , GL_LINEAR);
         glTextureParameteri(_handle.get(), GL_TEXTURE_MAG_FILTER , GL_LINEAR);
     }

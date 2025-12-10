@@ -6,6 +6,8 @@
 #include <string_view>
 #include <memory>
 
+#define TEXTURE_FUNC_ADD 0b00000001
+
 namespace OM3D {
 
 class Texture;
@@ -72,7 +74,7 @@ void audit_bindings();
 
 const Texture& brdf_lut();
 
-void draw_full_screen_triangle();
+void draw_full_screen_triangle(char flags = 0b00000000);
 void blit_to_screen(const Texture& tex);
 
 std::shared_ptr<Texture> default_black_texture();

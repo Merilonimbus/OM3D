@@ -10,6 +10,8 @@ enum class PassType {
     DEPTH,
     SHADOW,
     DEFFERED,
+    SUN_IBL,
+    POINT_LIGHT,
 };
 
 #endif //OM3D_PASSTYPE_HH

@@ -175,9 +175,17 @@ const Texture& brdf_lut() {
 }
 
 
-void draw_full_screen_triangle() {
+void draw_full_screen_triangle(const char flags) {
     if(audit_bindings_before_draw) {
         audit_bindings();
+    }
+    if (flags & TEXTURE_FUNC_ADD) {
+        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_ONE, GL_ONE);
+    } else {
+        glClearColor(0.5f, 0.7f, 0.8f, 0.0f);
+        glDisable(GL_BLEND);
     }
 
     glDisableVertexAttribArray(0);

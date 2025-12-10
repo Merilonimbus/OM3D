@@ -414,7 +414,7 @@ struct RendererState {
             state.tone_map_framebuffer = Framebuffer(nullptr, std::array{&state.tone_mapped_texture});
             state.depth_framebuffer = Framebuffer(&state.depth_texture);
             state.shadow_framebuffer = Framebuffer(&state.shadow_texture);
-            state.deferred_framebuffer = Framebuffer(&state.depth_texture, std::array{&state.albedo_roughness_texture, &state.normal_metalness_texture});
+            state.deferred_framebuffer = Framebuffer(&state.depth_texture, std::array{&state.lit_hdr_texture, &state.albedo_roughness_texture, &state.normal_metalness_texture});
             state.debug_framebuffer = Framebuffer(nullptr, std::array{&state.tone_mapped_texture});
             state.sun_ibl_framebuffer = Framebuffer(nullptr, std::array{&state.lit_hdr_texture});
         }
@@ -473,6 +473,7 @@ int main(int argc, char** argv) {
     auto tonemap_program = Program::from_files("tonemap.frag", "screen.vert");
     auto debug_program = Program::from_files("debug.frag", "screen.vert");
     auto sun_ibl_program = Program::from_files("sun_ibl.frag", "screen.vert");
+    auto point_lights_program = Program::from_files("point_lights.frag", "screen.vert");
     RendererState renderer;
 
     for(;;) {
@@ -534,8 +535,44 @@ int main(int argc, char** argv) {
                 glPopDebugGroup(); // Deferred Pass
             }
 
-            // Render the scene
             {
+                PROFILE_GPU("Sun & IBL Pass");
+                glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Sun & IBL Pass");
+
+                renderer.sun_ibl_framebuffer.bind(false, false);
+
+                renderer.depth_texture.bind(0);
+                renderer.albedo_roughness_texture.bind(1);
+                renderer.normal_metalness_texture.bind(2);
+                renderer.shadow_texture.bind(6);
+
+                sun_ibl_program->bind();
+
+                scene->render(PassType::SUN_IBL);
+
+                glPopDebugGroup(); // Sun & IBL Pass
+            }
+
+            {
+                PROFILE_GPU("Point Lights Pass");
+                glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Sun & IBL Pass");
+
+                renderer.sun_ibl_framebuffer.bind(false, false);
+
+                renderer.depth_texture.bind(0);
+                renderer.albedo_roughness_texture.bind(1);
+                renderer.normal_metalness_texture.bind(2);
+                renderer.shadow_texture.bind(6);
+
+                point_lights_program->bind();
+
+                scene->render(PassType::POINT_LIGHT);
+
+                glPopDebugGroup();
+            }
+
+            // Render the scene
+            /*{
                 PROFILE_GPU("Main pass");
                 glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Main pass");
 
@@ -545,7 +582,7 @@ int main(int argc, char** argv) {
                 scene->render(PassType::MAIN);
 
                 glPopDebugGroup();  // Main pass
-            }
+            }*/
 
             // Apply a tonemap as a full screen pass
             {
@@ -563,23 +600,21 @@ int main(int argc, char** argv) {
 
             {
                 if (current_state != nullptr && current_state != states[0]) {
-                    {
-                        PROFILE_GPU("Debug");
-                        glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Debug");
+                    PROFILE_GPU("Debug");
+                    glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Debug");
 
-                        size_t state = 0;
-                        for (; state < STATES_SIZE && states[state] != current_state; ++state);
+                    size_t state = 0;
+                    for (; state < STATES_SIZE && states[state] != current_state; ++state);
 
-                        renderer.debug_framebuffer.bind(false, true);
-                        debug_program->bind();
-                        debug_program->set_uniform(HASH("state"), static_cast<u32>(state));
-                        renderer.depth_texture.bind(0);
-                        renderer.albedo_roughness_texture.bind(1);
-                        renderer.normal_metalness_texture.bind(2);
-                        draw_full_screen_triangle();
+                    renderer.debug_framebuffer.bind(false, true);
+                    debug_program->bind();
+                    debug_program->set_uniform(HASH("state"), static_cast<u32>(state));
+                    renderer.depth_texture.bind(0);
+                    renderer.albedo_roughness_texture.bind(1);
+                    renderer.normal_metalness_texture.bind(2);
+                    draw_full_screen_triangle();
 
-                        glPopDebugGroup();  // Debug
-                    }
+                    glPopDebugGroup();  // Debug
                 }
             }
 

@@ -122,7 +122,7 @@ void Scene::set_sun(float altitude, float azimuth, glm::vec3 color) {
     _sun_color = color;
 }
 
-static void bind_brdf(u32 index = 5) {
+static void bind_brdf(const u32 index = 5) {
     brdf_lut().bind(index);
 }
 
@@ -225,6 +225,11 @@ void Scene::render_deferred(const PassType pass_type) const {
     TypedBuffer<shader::FrameData> buffer(nullptr, 1);
     set_frame_buffer(buffer);
 
+    bind_envmap();
+    bind_brdf();
+
+    render_sky();
+
     auto [opaques, _] = get_opaque_transparent(_camera);
 
     glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "Opaques");
@@ -262,6 +267,30 @@ void Scene::render_shadow([[maybe_unused]] const PassType pass_type) const {
     glPopDebugGroup(); // Opaques
 }
 
+void Scene::render_sun_ibl([[maybe_unused]] const PassType pass_type) const {
+    TypedBuffer<shader::FrameData> buffer(nullptr, 1);
+
+    bind_envmap();
+    bind_brdf();
+
+    set_frame_buffer(buffer);
+
+    draw_full_screen_triangle(TEXTURE_FUNC_ADD);
+}
+
+void Scene::render_point_lights([[maybe_unused]] const PassType pass_type) const {
+    TypedBuffer<shader::FrameData> frame_data_buffer(nullptr, 1);
+    TypedBuffer<shader::PointLight> point_light_buffer(nullptr, std::max(_point_lights.size(), static_cast<size_t>(1)));
+
+    bind_envmap();
+    bind_brdf();
+
+    set_frame_buffer(frame_data_buffer);
+    set_light(point_light_buffer);
+
+    draw_full_screen_triangle(TEXTURE_FUNC_ADD);
+}
+
 void Scene::render(const PassType pass_type) const {
     switch (pass_type) {
         case PassType::DEPTH:
@@ -275,6 +304,12 @@ void Scene::render(const PassType pass_type) const {
             break;
         case PassType::DEFFERED:
             render_deferred(pass_type);
+            break;
+        case PassType::SUN_IBL:
+            render_sun_ibl(pass_type);
+            break;
+        case PassType::POINT_LIGHT:
+            render_point_lights(pass_type);
             break;
     }
 }
