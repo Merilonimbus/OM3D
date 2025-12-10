@@ -23,6 +23,10 @@ layout(binding = 1) buffer PointLights {
     PointLight point_lights[];
 };
 
+bool is_point_illuminate(PointLight light, vec3 position) {
+    return length(light.position - position) <= light.radius;
+}
+
 void main() {
     const ivec2 coord = ivec2(gl_FragCoord.xy);
 
